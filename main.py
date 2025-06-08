@@ -6,6 +6,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import shutil
 import os
+from typing import List
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,7 +24,7 @@ app.add_middleware(
 )
 
 # Configuración de la base de datos MySQL
-DATABASE_URL = "mysql+mysqlconnector://root@localhost/miapp"
+DATABASE_URL = "mysql+pymysql://root@localhost:3306/myapp"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -38,7 +39,7 @@ class Tienda(Base):
     description = Column(String(255))
     price = Column(Float)
     category = Column(String(100))
-    image = Column(String(255))  # solo guardaremos el nombre del archivo o la ruta
+    media = Column(String(1000))  # solo guardaremos el nombre del archivo o la ruta
 
 Base.metadata.create_all(bind=engine)
 
@@ -52,13 +53,17 @@ async def create_product(
     description: str = Form(...),
     price: float = Form(...),
     category: str = Form(...),
-    image: UploadFile = File(...)
+    media: List[UploadFile] = File(...)
 ):
     try:
+        saved_files = []
         # Guardar imagen en la carpeta local
-        image_path = f"images/{image.filename}"
-        with open(image_path, "wb") as buffer:
-            shutil.copyfileobj(image.file, buffer)
+        for file in media:
+            ext = os.path.splitext(file.filename)[1]
+            path = f"images/{file.filename}"  # puedes renombrar para evitar duplicados
+            with open(path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            saved_files.append(f"http://localhost:8000/{path}")
 
         db = SessionLocal()
         nuevo_producto = Tienda(
@@ -66,7 +71,7 @@ async def create_product(
             description=description,
             price=price,
             category=category,
-            image=image_path,
+            media=",".join(saved_files), # guarda como string separado por comas
         )
         db.add(nuevo_producto)
         db.commit()
@@ -77,7 +82,7 @@ async def create_product(
             "description": nuevo_producto.description,
             "price": nuevo_producto.price,
             "category": nuevo_producto.category,
-            "image": f"http://localhost:8000/{image_path}",
+            "media": saved_files,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -88,13 +93,14 @@ def get_producto(id: int):
     db = SessionLocal()
     producto = db.query(Tienda).filter(Tienda.id == id).first()
     if producto:
+        media_urls = producto.media.split(",")
         return {
             "id": producto.id,
             "title": producto.title,
             "description": producto.description,
             "price": producto.price,
             "category": producto.category,
-            "image": f"http://localhost:8000/{producto.image}",
+            "media": media_urls,
         }
     else:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
@@ -104,6 +110,7 @@ def get_producto(id: int):
 def get_all_productos():
     db = SessionLocal()
     productos = db.query(Tienda).all()
+    media_urls = productos.media.split(",")
     return [
         {
             "id": producto.id,
@@ -111,7 +118,7 @@ def get_all_productos():
             "description": producto.description,
             "price": producto.price,
             "category": producto.category,
-            "image": f"http://localhost:8000/{producto.image}",
+            "image": media_urls,
         }
         for producto in productos
     ]
