@@ -27,7 +27,7 @@ app.add_middleware(
 )
 
 # Configuración de la base de datos MySQL
-DATABASE_URL = "mysql+pymysql://root@localhost:3306/myapp"
+DATABASE_URL = "mysql+pymysql://root@localhost:3306/tienda"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -48,7 +48,7 @@ class Usuario(Base):
     __tablename__ = 'usuarios'
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(50))
-    email = Column(String(255), unique=True, index=True)
+    email = Column(String(191), unique=True, index=True)
     password = Column(String(255))  # Idealmente con hash
 
 class Carrito(Base):
